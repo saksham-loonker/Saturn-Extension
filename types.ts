@@ -4,7 +4,7 @@ export enum Role {
   MODEL = 'model'
 }
 
-export type SearchMode = 'fast' | 'normal' | 'pro' | 'image' | 'video' | 'nobs' | 'simple';
+export type SearchMode = 'fast' | 'normal' | 'pro' | 'image' | 'video' | 'direct' | 'simple';
 export type Theme = 'red' | 'blue' | 'incognito' | 'glass' | 'light' | 'blackbox' | 'charcoal-cosmic' | 'galaxy';
 
 export interface Source {
@@ -33,7 +33,8 @@ export interface Message {
   timestamp: number;
   sources?: Source[];
   isStreaming?: boolean;
-  attachment?: Attachment;
+  attachment?: Attachment; // Deprecated, kept for backward compatibility
+  attachments?: Attachment[]; // New: support multiple attachments
   generatedMedia?: GeneratedMedia;
   iframeUrl?: string; // kept for backward compatibility or specific message embeds
 }
@@ -66,7 +67,7 @@ export interface DownloadItem {
   id: string;
   filename: string;
   timestamp: number;
-  type: 'image' | 'video' | 'pdf';
+  type: 'image' | 'video' | 'pdf' | 'file';
   uri?: string;
 }
 

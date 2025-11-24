@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import GXSidebar from './components/GXSidebar';
+import SaturnSidebar from './components/SaturnSidebar';
 import HistoryDrawer from './components/HistoryDrawer';
 import SidebarPanel from './components/SidebarPanel';
 import MessageBubble from './components/MessageBubble';
@@ -32,6 +32,16 @@ const DEFAULT_BROWSER_STATE: BrowserState = {
 
 const AVATAR_COLORS = ['bg-red-600', 'bg-blue-600', 'bg-green-600', 'bg-yellow-600', 'bg-purple-600', 'bg-pink-600', 'bg-indigo-600'];
 const GALAXY_IMG = "https://images.unsplash.com/photo-1534796636912-3b95b3ab5980?q=80&w=2000";
+
+function getInitialTab(): Tab {
+    return {
+        id: createNewTab(),
+        title: 'New Thread',
+        messages: [],
+        createdAt: Date.now(),
+        browserState: { ...DEFAULT_BROWSER_STATE }
+    };
+}
 
 export default function App() {
     // --- User Management ---
@@ -66,9 +76,11 @@ export default function App() {
     // --- Session State (Per User) ---
     const [tabs, setTabs] = useState<Tab[]>([]);
     const [activeTabId, setActiveTabId] = useState<string>('');
+    const [archivedTabs, setArchivedTabs] = useState<Tab[]>([]);
     const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
     const [downloads, setDownloads] = useState<DownloadItem[]>([]);
     const [globalHistory, setGlobalHistory] = useState<HistoryItem[]>([]);
+    const [customInstructions, setCustomInstructions] = useState<string>('');
 
     // Sidebar State
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -80,7 +92,6 @@ export default function App() {
     const [isIncognito, setIsIncognito] = useState(false);
     const [customBackdrop, setCustomBackdrop] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const isFirstLoad = useRef(true);
 
     // --- Persistence & User Switching ---
     useEffect(() => {
@@ -91,65 +102,64 @@ export default function App() {
             const savedData = localStorage.getItem(storageKey);
             if (savedData) {
                 const data = JSON.parse(savedData);
-                const loadedTabs = (data.tabs || []).map((t: any) => ({
-                    ...t,
-                    browserState: t.browserState || { ...DEFAULT_BROWSER_STATE }
-                }));
 
-                const active = loadedTabs.find((t: any) => t.id === data.activeTabId) || loadedTabs[0];
+                // ARCHIVE OLD TABS: Move any previous active tabs to archive
+                const previousTabs = data.tabs || [];
+                const previousArchives = data.archivedTabs || [];
+                // Filter out empty new tabs from archive to avoid clutter
+                const validPreviousTabs = previousTabs.filter((t: Tab) => t.messages.length > 0);
 
-                if (active) {
-                    setTabs([active]);
-                    setActiveTabId(active.id);
-                } else {
-                    const initialId = createNewTab();
-                    setTabs([{
-                        id: initialId,
-                        title: 'New Thread',
-                        messages: [],
-                        createdAt: Date.now(),
-                        browserState: { ...DEFAULT_BROWSER_STATE }
-                    }]);
-                    setActiveTabId(initialId);
-                }
+                const newTab = getInitialTab();
+                setTabs([newTab]);
+                setActiveTabId(newTab.id);
 
+                setArchivedTabs([...validPreviousTabs, ...previousArchives]);
                 setBookmarks(data.bookmarks || []);
                 setDownloads(data.downloads || []);
                 setGlobalHistory(data.globalHistory || []);
                 setCustomBackdrop(data.customBackdrop || null);
-                setCurrentTheme(currentUser.theme);
+                setCustomInstructions(data.customInstructions || '');
+                setIsIncognito(data.isIncognito || false);
             } else {
-                const initialId = createNewTab();
-                setTabs([{
-                    id: initialId,
-                    title: 'New Thread',
-                    messages: [],
-                    createdAt: Date.now(),
-                    browserState: { ...DEFAULT_BROWSER_STATE }
-                }]);
-                setActiveTabId(initialId);
+                const newTab = getInitialTab();
+                setTabs([newTab]);
+                setActiveTabId(newTab.id);
+                setArchivedTabs([]);
                 setBookmarks([]);
                 setDownloads([]);
                 setGlobalHistory([]);
                 setCustomBackdrop(null);
-                setCurrentTheme(currentUser.theme);
+                setCustomInstructions('');
+                setIsIncognito(false);
             }
         } catch (e) {
             console.error("Failed to load user data", e);
+            const newTab = getInitialTab();
+            setTabs([newTab]);
+            setActiveTabId(newTab.id);
+            setArchivedTabs([]);
+            setBookmarks([]);
+            setDownloads([]);
+            setGlobalHistory([]);
+            setCustomBackdrop(null);
+            setCustomInstructions('');
+            setIsIncognito(false);
         }
+        setCurrentTheme(currentUser.theme);
         localStorage.setItem('deepsearch_current_user_id', userId);
-    }, [currentUser.id]);
+    }, []);
 
     useEffect(() => {
-        if (isFirstLoad.current) {
-            isFirstLoad.current = false;
-            return;
-        }
         const userId = currentUser.id;
         const storageKey = `deepsearch_data_${userId}`;
-        const dataToSave = { tabs, activeTabId, bookmarks, downloads, customBackdrop, globalHistory };
+
+        // In incognito mode, don't persist conversation history (tabs/archivedTabs/globalHistory)
+        const dataToSave = isIncognito
+            ? { bookmarks, downloads, customBackdrop, customInstructions, isIncognito }
+            : { tabs, activeTabId, archivedTabs, bookmarks, downloads, customBackdrop, globalHistory, customInstructions, isIncognito };
+
         localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-    }, [tabs, activeTabId, bookmarks, downloads, customBackdrop, globalHistory, currentUser.id]);
+    }, [tabs, archivedTabs, activeTabId, bookmarks, downloads, customBackdrop, globalHistory, customInstructions, isIncognito]);
 
     useEffect(() => {
         localStorage.setItem('deepsearch_users', JSON.stringify(users));
@@ -337,16 +347,27 @@ export default function App() {
     };
 
     const handleNewTab = () => {
-        const newId = createNewTab();
-        const newTab: Tab = {
-            id: newId,
-            title: 'New Thread',
-            messages: [],
-            createdAt: Date.now(),
-            browserState: { ...DEFAULT_BROWSER_STATE }
-        };
+        const currentActiveTab = tabs.find(t => t.id === activeTabId);
+        if (currentActiveTab && currentActiveTab.messages.length > 0) {
+            setArchivedTabs(prev => [currentActiveTab, ...prev]);
+        }
+        const newTab = getInitialTab();
         setTabs([newTab]);
-        setActiveTabId(newId);
+        setActiveTabId(newTab.id);
+    };
+
+    const handleRestoreTab = (tabId: string) => {
+        const tabToRestore = archivedTabs.find(t => t.id === tabId);
+        if (tabToRestore) {
+            const currentActiveTab = tabs.find(t => t.id === activeTabId);
+            if (currentActiveTab && currentActiveTab.messages.length > 0) {
+                setArchivedTabs(prev => [currentActiveTab, ...prev.filter(t => t.id !== tabId)]);
+            } else {
+                setArchivedTabs(prev => prev.filter(t => t.id !== tabId));
+            }
+            setTabs([tabToRestore]);
+            setActiveTabId(tabId);
+        }
     };
 
     const handleLoadHistory = (title: string) => {
@@ -432,13 +453,13 @@ export default function App() {
         setTabs(prev => prev.map(tab => tab.id === activeTabId ? { ...tab, browserState: { ...tab.browserState, isOpen: false } } : tab));
     };
 
-    const handleSendMessage = async (text: string, attachment?: Attachment, modeOverride?: SearchMode) => {
+    const handleSendMessage = async (text: string, attachments?: Attachment[], modeOverride?: SearchMode) => {
         const currentTabId = activeTabId;
         const effectiveMode = modeOverride || searchMode;
         const trimmedText = text.trim();
         const isUrl = /^(http(s)?:\/\/)|(www\.)|([-a-zA-Z0-9@:%._\+~#=]{2,256}\.(com|org|net|edu|gov|io|ai|co|uk|ca|de|jp|fr|au)\b)/i.test(trimmedText) && !trimmedText.includes(' ');
 
-        if (isUrl && !attachment && effectiveMode === 'normal') {
+        if (isUrl && !attachments && effectiveMode === 'normal') {
             handleNavigate(trimmedText);
             return;
         }
@@ -455,7 +476,7 @@ export default function App() {
             setGlobalHistory(prev => [historyItem, ...prev].slice(0, 500));
         }
 
-        const userMsg: Message = { id: Date.now().toString(), role: Role.USER, content: text, timestamp: Date.now(), attachment: attachment };
+        const userMsg: Message = { id: Date.now().toString(), role: Role.USER, content: text, timestamp: Date.now(), attachments: attachments };
 
         setTabs(prev => prev.map(tab => {
             if (tab.id === currentTabId) {
@@ -498,6 +519,7 @@ export default function App() {
 
             await streamGeminiResponse(
                 history, effectiveMode, activeExtensions, currentUser.preferredModel || 'gemini-flash-latest',
+                customInstructions,
                 (textChunk, sources) => {
                     setTabs(prev => prev.map(tab => tab.id === currentTabId ? { ...tab, messages: tab.messages.map(msg => msg.id === botMsgId ? { ...msg, content: msg.content + textChunk, sources: sources || msg.sources } : msg) } : tab));
                 },
@@ -557,7 +579,7 @@ export default function App() {
             {!customBackdrop && starField}
             {(customBackdrop || currentTheme === 'galaxy') && <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] pointer-events-none z-0" />}
 
-            <GXSidebar
+            <SaturnSidebar
                 onNewTab={handleNewTab}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onToggleHistory={handleToggleHistory}
@@ -576,8 +598,8 @@ export default function App() {
                 onSelectTab={(id) => { setActiveTabId(id); setIsSidebarOpen(false); }}
                 bookmarks={bookmarks}
                 onSelectBookmark={(b) => handleLoadHistory(b.query)}
-                history={globalHistory}
-                onClearHistory={() => setGlobalHistory([])}
+                pastConversations={archivedTabs}
+                onRestoreTab={handleRestoreTab}
             />
 
             <SidebarPanel
@@ -613,6 +635,12 @@ export default function App() {
                     onDeleteCustomShortcut={handleDeleteCustomShortcut}
                     onSetModel={handleSetModel}
                     onSetImageModel={handleSetImageModel}
+                    tabs={tabs}
+                    setTabs={setTabs}
+                    archivedTabs={archivedTabs}
+                    setArchivedTabs={setArchivedTabs}
+                    customInstructions={customInstructions}
+                    setCustomInstructions={setCustomInstructions}
                 />
 
                 <div className="flex flex-col flex-1 overflow-hidden relative h-full transition-all duration-300">
