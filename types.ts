@@ -5,7 +5,7 @@ export enum Role {
 }
 
 export type SearchMode = 'fast' | 'normal' | 'pro' | 'image' | 'video' | 'direct' | 'simple';
-export type Theme = 'red' | 'blue' | 'incognito' | 'glass' | 'light' | 'blackbox' | 'charcoal-cosmic' | 'galaxy';
+export type Theme = 'saturn' | 'game' | 'dev' | 'paper' | 'space' | 'red' | 'blue' | 'incognito' | 'glass' | 'light' | 'blackbox' | 'charcoal-cosmic' | 'galaxy';
 
 export interface Source {
   title?: string;
@@ -56,12 +56,6 @@ export interface Tab {
   browserState: BrowserState;
 }
 
-export interface Bookmark {
-  id: string;
-  title: string;
-  query: string;
-  createdAt: number;
-}
 
 export interface DownloadItem {
   id: string;

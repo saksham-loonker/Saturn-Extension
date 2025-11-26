@@ -1,20 +1,19 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import SaturnSidebar from './components/SaturnSidebar';
-import HistoryDrawer from './components/HistoryDrawer';
+import SaturnDock from './components/SaturnDock';
+import HistoryView from './components/HistoryView';
 import SidebarPanel from './components/SidebarPanel';
 import MessageBubble from './components/MessageBubble';
-import InputArea from './components/InputArea';
+import OmniBar from './components/OmniBar';
 import SettingsModal from './components/SettingsModal';
-import { Tab, Message, Role, SearchMode, Attachment, Theme, Bookmark, DownloadItem, UserProfile, Extension, BrowserState, CustomShortcut, HistoryItem } from './types';
+import { Tab, Message, Role, SearchMode, Attachment, Theme, DownloadItem, UserProfile, Extension, BrowserState, CustomShortcut, HistoryItem } from './types';
 import { createNewTab, streamGeminiResponse, generateImage, generateVideo } from './services/geminiService';
 import { X } from 'lucide-react';
 
 const DEFAULT_USER: UserProfile = {
     id: 'default',
     name: 'Guest',
-    theme: 'red',
-    avatarColor: 'bg-red-600',
+    theme: 'saturn',
+    avatarColor: 'bg-blue-600',
     enabledExtensions: [],
     enabledSidebarApps: ['notes', 'calculator', 'spotify', 'whatsapp', 'youtube', 'reddit', 'x'],
     customShortcuts: [],
@@ -77,13 +76,12 @@ export default function App() {
     const [tabs, setTabs] = useState<Tab[]>([]);
     const [activeTabId, setActiveTabId] = useState<string>('');
     const [archivedTabs, setArchivedTabs] = useState<Tab[]>([]);
-    const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
     const [downloads, setDownloads] = useState<DownloadItem[]>([]);
     const [globalHistory, setGlobalHistory] = useState<HistoryItem[]>([]);
     const [customInstructions, setCustomInstructions] = useState<string>('');
 
     // Sidebar State
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
     const [activeSidebarApp, setActiveSidebarApp] = useState<string | null>(null);
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -114,7 +112,6 @@ export default function App() {
                 setActiveTabId(newTab.id);
 
                 setArchivedTabs([...validPreviousTabs, ...previousArchives]);
-                setBookmarks(data.bookmarks || []);
                 setDownloads(data.downloads || []);
                 setGlobalHistory(data.globalHistory || []);
                 setCustomBackdrop(data.customBackdrop || null);
@@ -125,7 +122,6 @@ export default function App() {
                 setTabs([newTab]);
                 setActiveTabId(newTab.id);
                 setArchivedTabs([]);
-                setBookmarks([]);
                 setDownloads([]);
                 setGlobalHistory([]);
                 setCustomBackdrop(null);
@@ -138,7 +134,6 @@ export default function App() {
             setTabs([newTab]);
             setActiveTabId(newTab.id);
             setArchivedTabs([]);
-            setBookmarks([]);
             setDownloads([]);
             setGlobalHistory([]);
             setCustomBackdrop(null);
@@ -155,11 +150,11 @@ export default function App() {
 
         // In incognito mode, don't persist conversation history (tabs/archivedTabs/globalHistory)
         const dataToSave = isIncognito
-            ? { bookmarks, downloads, customBackdrop, customInstructions, isIncognito }
-            : { tabs, activeTabId, archivedTabs, bookmarks, downloads, customBackdrop, globalHistory, customInstructions, isIncognito };
+            ? { downloads, customBackdrop, customInstructions, isIncognito }
+            : { tabs, activeTabId, archivedTabs, downloads, customBackdrop, globalHistory, customInstructions, isIncognito };
 
         localStorage.setItem(storageKey, JSON.stringify(dataToSave));
-    }, [tabs, archivedTabs, activeTabId, bookmarks, downloads, customBackdrop, globalHistory, customInstructions, isIncognito]);
+    }, [tabs, archivedTabs, activeTabId, downloads, customBackdrop, globalHistory, customInstructions, isIncognito]);
 
     useEffect(() => {
         localStorage.setItem('deepsearch_users', JSON.stringify(users));
@@ -211,7 +206,7 @@ export default function App() {
 
     const handleToggleHistory = () => {
         if (activeSidebarApp) setActiveSidebarApp(null);
-        setIsSidebarOpen(!isSidebarOpen);
+        setShowHistory(!showHistory);
     };
 
     const handleOpenApp = (appId: string) => {
@@ -228,7 +223,7 @@ export default function App() {
         };
 
         if (sidebarWidgets.includes(appId)) {
-            if (isSidebarOpen) setIsSidebarOpen(false);
+            if (showHistory) setShowHistory(false);
             if (activeSidebarApp === appId) {
                 setActiveSidebarApp(null);
             } else {
@@ -371,19 +366,32 @@ export default function App() {
     };
 
     const handleLoadHistory = (title: string) => {
+        // Check if we already have an active tab with this title (optional optimization)
+        // Or check if it exists in archived tabs
+        const archived = archivedTabs.find(t => t.title === title);
+        if (archived) {
+            handleRestoreTab(archived.id);
+            setShowHistory(false);
+            return;
+        }
+
+        // Otherwise treat it as a new search query
         const newId = createNewTab();
         const newTab: Tab = {
             id: newId,
             title: title,
             messages: [
-                { id: 'h1', role: Role.USER, content: `Tell me about ${title}`, timestamp: Date.now() }
+                { id: 'h1', role: Role.USER, content: title, timestamp: Date.now() }
             ],
             createdAt: Date.now(),
             browserState: { ...DEFAULT_BROWSER_STATE }
         };
         setTabs([newTab]);
         setActiveTabId(newId);
-        setIsSidebarOpen(false);
+        setShowHistory(false);
+        
+        // TRIGGER THE SEARCH
+        handleSendMessage(title); 
     };
 
     const handleNavigate = (url: string) => {
@@ -480,6 +488,12 @@ export default function App() {
 
         setTabs(prev => prev.map(tab => {
             if (tab.id === currentTabId) {
+                // Don't add duplicate if we just created it in handleLoadHistory
+                const lastMsg = tab.messages[tab.messages.length - 1];
+                if (lastMsg && lastMsg.content === text && lastMsg.role === Role.USER && (Date.now() - lastMsg.timestamp < 500)) {
+                    return tab;
+                }
+
                 const displayTitle = text ? (text.slice(0, 30) + (text.length > 30 ? '...' : '')) : 'Media Generation';
                 const title = tab.messages.length === 0 ? displayTitle : tab.title;
                 return { ...tab, title, messages: [...tab.messages, userMsg] };
@@ -500,7 +514,7 @@ export default function App() {
             window.location.href = `https://www.google.com/search?q=${encodeURIComponent(text)}`;
         } else if (effectiveMode === 'image') {
             try {
-                const result = await generateImage(text, currentUser.preferredImageModel || 'gemini-2.5-flash-image');
+                const result = await generateImage(text, currentUser.preferredImageModel || 'gemini-2.5-flash-image', attachments);
                 setTabs(prev => prev.map(tab => tab.id === currentTabId ? { ...tab, messages: tab.messages.map(m => m.id === botMsgId ? { ...m, isStreaming: false, generatedMedia: result } : m) } : tab));
             } catch (e) {
                 const errorMessage = e instanceof Error ? e.message : String(e);
@@ -537,79 +551,52 @@ export default function App() {
     const browserState = activeTab?.browserState;
     const isIframeOpen = browserState?.isOpen && browserState?.url;
 
-    const starField = useMemo(() => {
-        if (currentTheme !== 'blackbox' && currentTheme !== 'galaxy') return null;
-        const stars = Array.from({ length: currentTheme === 'galaxy' ? 20 : 50 }).map((_, i) => (
-            <div key={`star-${i}`} className="star" style={{
-                top: `${Math.random() * 100}%`,
-                left: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                opacity: Math.random() * 0.7 + 0.3
-            }} />
-        ));
-        const fallingStars = Array.from({ length: 8 }).map((_, i) => (
-            <div key={`falling-${i}`} className="falling-star" style={{
-                top: `${Math.random() * 50 - 20}%`,
-                left: `${Math.random() * 50 - 20}%`,
-                animationDelay: `${Math.random() * 10}s`,
-                animationDuration: `${Math.random() * 2 + 4}s`
-            }} />
-        ));
-        return <div className="cosmic-stars">{stars}{fallingStars}</div>;
-    }, [currentTheme]);
-
-
     return (
         <div
-            className="flex h-[100dvh] bg-zen-bg text-zen-text font-sans overflow-hidden transition-colors duration-500 bg-cover bg-center relative"
+            className="relative w-full h-[100dvh] overflow-hidden font-sans text-zen-text bg-zen-bg transition-colors duration-500 bg-cover bg-center"
             style={
                 customBackdrop ? { backgroundImage: `url(${customBackdrop})` } :
                     currentTheme === 'galaxy' ? { backgroundImage: `url(${GALAXY_IMG})` } :
                         {}
             }
         >
-            {!customBackdrop && currentTheme !== 'blackbox' && currentTheme !== 'galaxy' && (
-                <div className="mesh-bg">
-                    <div className={`mesh-blob w-[600px] h-[600px] top-[-200px] left-[-200px] ${currentTheme === 'charcoal-cosmic' ? 'bg-orange-600/15' : 'bg-zen-accent/20'
-                        }`}></div>
-                    <div className={`mesh-blob w-[500px] h-[500px] bottom-[-100px] right-[-100px] ${currentTheme === 'charcoal-cosmic' ? 'bg-purple-900/20' : 'bg-blue-500/10'
-                        }`} style={{ animationDelay: '5s' }}></div>
-                </div>
-            )}
-            {!customBackdrop && starField}
-            {(customBackdrop || currentTheme === 'galaxy') && <div className="absolute inset-0 bg-black/30 backdrop-blur-[1px] pointer-events-none z-0" />}
+            {/* Background Layer */}
+            {(customBackdrop || currentTheme === 'galaxy') && <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] pointer-events-none z-0" />}
 
-            <SaturnSidebar
+            {/* Dock (Left) */}
+            <SaturnDock
                 onNewTab={handleNewTab}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onToggleHistory={handleToggleHistory}
-                isHistoryOpen={isSidebarOpen}
+                isHistoryOpen={showHistory}
                 activeApp={activeSidebarApp}
                 onOpenApp={handleOpenApp}
                 enabledApps={currentUser.enabledSidebarApps || []}
                 customShortcuts={currentUser.customShortcuts || []}
             />
 
-            <HistoryDrawer
-                isOpen={isSidebarOpen}
-                onClose={() => setIsSidebarOpen(false)}
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onSelectTab={(id) => { setActiveTabId(id); setIsSidebarOpen(false); }}
-                bookmarks={bookmarks}
-                onSelectBookmark={(b) => handleLoadHistory(b.query)}
-                pastConversations={archivedTabs}
-                onRestoreTab={handleRestoreTab}
+            {/* Overlays */}
+            <HistoryView 
+                isOpen={showHistory}
+                onClose={() => setShowHistory(false)}
+                history={globalHistory}
+                archivedTabs={archivedTabs}
+                onSelectHistory={(item) => {
+                    if (item.type === 'visit') {
+                        handleNavigate(item.url);
+                        setShowHistory(false);
+                    } else {
+                        handleLoadHistory(item.title);
+                    }
+                }}
+                onRestoreTab={(id) => {
+                    handleRestoreTab(id);
+                    setShowHistory(false);
+                }}
+                onClear={() => setGlobalHistory([])}
             />
 
-            <SidebarPanel
-                isOpen={!!activeSidebarApp}
-                appId={activeSidebarApp}
-                onClose={() => setActiveSidebarApp(null)}
-            />
-
-            <div className="flex-1 flex flex-col min-w-0 z-10 relative h-full transition-all duration-500">
-                <SettingsModal
+            <SettingsModal
                     isOpen={isSettingsOpen}
                     onClose={() => setIsSettingsOpen(false)}
                     theme={currentTheme}
@@ -620,7 +607,6 @@ export default function App() {
                     setCustomBackdrop={setCustomBackdrop}
                     enabledSidebarApps={currentUser.enabledSidebarApps || []}
                     toggleSidebarApp={handleToggleSidebarApp}
-                    // New Props
                     currentUser={currentUser}
                     users={users}
                     onSwitchUser={handleSwitchUser}
@@ -630,7 +616,6 @@ export default function App() {
                     onToggleExtension={handleToggleExtension}
                     onCreateExtension={handleCreateExtension}
                     onDeleteExtension={handleDeleteExtension}
-                    // Shortcuts
                     onAddCustomShortcut={handleAddCustomShortcut}
                     onDeleteCustomShortcut={handleDeleteCustomShortcut}
                     onSetModel={handleSetModel}
@@ -641,85 +626,90 @@ export default function App() {
                     setArchivedTabs={setArchivedTabs}
                     customInstructions={customInstructions}
                     setCustomInstructions={setCustomInstructions}
-                />
+            />
 
-                <div className="flex flex-col flex-1 overflow-hidden relative h-full transition-all duration-300">
-                    <div className="flex-1 relative overflow-hidden">
-                        {isIframeOpen && browserState ? (
-                            <div className="relative w-full h-full animate-scale-in bg-white">
-                                <button
-                                    onClick={handleExitIframe}
-                                    className="absolute top-4 right-4 z-50 bg-zen-surface border border-zen-border text-zen-text px-4 py-2 rounded-full shadow-xl hover:bg-zen-bg transition-colors flex items-center gap-2 font-bold text-sm group backdrop-blur-md hover:shadow-glow"
-                                >
-                                    <X className="w-4 h-4 group-hover:text-red-500 transition-colors" />
-                                    Return to Chat
-                                </button>
-                                <iframe
-                                    key={browserState.key}
-                                    src={browserState.url}
-                                    className="w-full h-full border-0 bg-white"
-                                    title="Search Results"
-                                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
-                                />
-                            </div>
-                        ) : (
-                            <>
-                                <div className="absolute inset-0 overflow-y-auto scroll-smooth pb-96 custom-scrollbar">
-                                    <div className="max-w-6xl mx-auto w-full px-8 pt-16 min-h-full flex flex-col">
-                                        {!activeTab?.messages.length ? (
-                                            <div className="flex-1 flex flex-col items-center justify-center animate-slide-up">
-                                                <div className="mb-8 relative flex items-center justify-center group">
-                                                    <div className="absolute inset-0 bg-zen-accent/20 blur-3xl rounded-full animate-pulse-slow" />
-                                                    <svg viewBox="0 0 100 100" className="w-36 h-36 text-zen-accent animate-spin-slow opacity-90 relative z-10 filter drop-shadow-[0_0_20px_rgba(var(--accent-color-rgb),0.6)]">
-                                                        <circle cx="50" cy="50" r="20" fill="currentColor" />
-                                                        <ellipse cx="50" cy="50" rx="40" ry="10" fill="none" stroke="currentColor" strokeWidth="4" transform="rotate(-15 50 50)" />
-                                                    </svg>
-                                                </div>
-                                                <h1 className="text-6xl font-bold mb-6 text-zen-text tracking-tighter text-center drop-shadow-lg">Saturn</h1>
+            <SidebarPanel
+                isOpen={!!activeSidebarApp}
+                appId={activeSidebarApp}
+                onClose={() => setActiveSidebarApp(null)}
+            />
+
+            {/* Main Content Area */}
+            <div className="absolute inset-0 left-24 right-0 bottom-0 top-0 flex flex-col overflow-hidden z-0">
+                {isIframeOpen && browserState ? (
+                     <div className="relative w-full h-full animate-scale-in bg-zen-surface/95 z-40 rounded-l-[2rem] overflow-hidden border-l border-y border-zen-border shadow-2xl backdrop-blur-xl">
+                         <button
+                             onClick={handleExitIframe}
+                             className="absolute top-4 right-4 z-50 bg-black/50 border border-white/10 text-white px-4 py-2 rounded-full shadow-xl hover:bg-zen-accent hover:border-transparent transition-all flex items-center gap-2 font-bold text-xs group backdrop-blur-md hover:shadow-glow"
+                         >
+                             <X className="w-3.5 h-3.5" />
+                             Close Browser
+                         </button>
+                         <iframe
+                             key={browserState.key}
+                             src={browserState.url}
+                             className="w-full h-full border-0 bg-white"
+                             title="Search Results"
+                             sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
+                         />
+                     </div>
+                ) : (
+                    <div className="flex-1 flex flex-col relative overflow-hidden min-h-0">
+                        {/* Messages Container */}
+                        <div className="flex-1 w-full h-full overflow-y-auto pb-32 px-4 md:px-8 pt-4 scrollbar-thumb-zen-accent scrollbar-track-transparent">
+                             <div className="max-w-4xl mx-auto w-full pt-12 min-h-full flex flex-col">
+                                {!activeTab?.messages.length ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center animate-slide-up select-none">
+                                        <div className="mb-8 relative flex items-center justify-center group">
+                                            <div className="absolute inset-0 bg-zen-accent/20 blur-3xl rounded-full animate-pulse-slow" />
+                                            <div className="w-24 h-24 rounded-2xl bg-zen-surface border border-zen-border flex items-center justify-center text-zen-accent shadow-2xl transform group-hover:scale-105 transition-transform duration-500">
+                                                 <svg viewBox="0 0 100 100" className="w-12 h-12 fill-current">
+                                                    <circle cx="50" cy="50" r="20" />
+                                                    <ellipse cx="50" cy="50" rx="40" ry="10" fill="none" stroke="currentColor" strokeWidth="8" transform="rotate(-15 50 50)" />
+                                                </svg>
                                             </div>
-                                        ) : (
-                                            <div className="flex flex-col justify-end flex-1 pb-10">
-                                                {activeTab.messages.map((msg) => (
-                                                    <MessageBubble
-                                                        key={msg.id}
-                                                        message={msg}
-                                                        onDownload={(i) => setDownloads(prev => [i, ...prev])}
-                                                        onNavigate={handleNavigate}
-                                                    />
-                                                ))}
-                                                {activeTab.messages[activeTab.messages.length - 1]?.isStreaming && !activeTab.messages[activeTab.messages.length - 1]?.content && (
-                                                    <div className="flex justify-start mb-8 animate-fade-in">
-                                                        <div className="flex gap-4 max-w-4xl">
-                                                            <div className="glass-panel px-6 py-4 rounded-2xl flex items-center gap-3 shadow-lg">
-                                                                <div className="flex gap-1.5">
-                                                                    <div className="w-2 h-2 bg-zen-accent rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
-                                                                    <div className="w-2 h-2 bg-zen-accent rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                                                                    <div className="w-2 h-2 bg-zen-accent rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
-                                                                </div>
-                                                                <span className="text-sm text-zen-muted font-bold tracking-wider ml-2">PROCESSING</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                <div ref={messagesEndRef} />
+                                        </div>
+                                        <h1 className="text-4xl font-bold mb-4 text-zen-text tracking-tighter">Saturn</h1>
+                                        <p className="text-zen-muted text-lg font-medium opacity-60">How can I help you today?</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col justify-end flex-1 space-y-6 pb-4">
+                                        {activeTab.messages.map((msg) => (
+                                            <MessageBubble
+                                                key={msg.id}
+                                                message={msg}
+                                                onDownload={(i) => setDownloads(prev => [i, ...prev])}
+                                                onNavigate={handleNavigate}
+                                            />
+                                        ))}
+                                        {activeTab.messages[activeTab.messages.length - 1]?.isStreaming && !activeTab.messages[activeTab.messages.length - 1]?.content && (
+                                            <div className="flex justify-start animate-fade-in pl-4">
+                                                <div className="flex gap-1.5 items-center h-10">
+                                                    <div className="w-1.5 h-1.5 bg-zen-accent rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+                                                    <div className="w-1.5 h-1.5 bg-zen-accent rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                                                    <div className="w-1.5 h-1.5 bg-zen-accent rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                                                </div>
                                             </div>
                                         )}
+                                        <div ref={messagesEndRef} />
                                     </div>
-                                </div>
-                                <div className="absolute bottom-0 left-0 right-0 p-6 pb-12 z-20 bg-gradient-to-t from-zen-bg via-zen-bg/80 to-transparent pointer-events-none">
-                                    <div className="pointer-events-auto max-w-6xl mx-auto">
-                                        <InputArea
-                                            onSend={(text, attach) => handleSendMessage(text, attach)}
-                                            disabled={activeTab?.messages[activeTab.messages.length - 1]?.isStreaming || false}
-                                            mode={searchMode}
-                                            setMode={setSearchMode}
-                                        />
-                                    </div>
-                                </div>
-                            </>
-                        )}
+                                )}
+                             </div>
+                        </div>
+
+                        {/* Floating OmniBar */}
+                        <div className="absolute bottom-6 left-0 right-0 z-30 flex justify-center pointer-events-none">
+                             <div className="w-full max-w-4xl pointer-events-auto">
+                                <OmniBar
+                                    onSend={(text, attach) => handleSendMessage(text, attach)}
+                                    disabled={activeTab?.messages[activeTab.messages.length - 1]?.isStreaming || false}
+                                    mode={searchMode}
+                                    setMode={setSearchMode}
+                                />
+                             </div>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

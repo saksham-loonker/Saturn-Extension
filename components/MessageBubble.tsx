@@ -537,25 +537,28 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDownload, onNa
     };
 
     return (
-        <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} mb-10 animate-slide-up group`}>
-            <div className={`flex gap-6 max-w-[90%] lg:max-w-[85%] w-full ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <div className={`flex w-full justify-start mb-12 animate-slide-up group`}>
+            <div className={`flex gap-6 max-w-4xl w-full`}>
 
                 <div className={`
-          w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 transition-all duration-500 group-hover:scale-110 shadow-lg
-          ${isUser ? 'glass-panel text-zen-text' : 'bg-zen-text text-zen-bg shadow-glow'}
+          w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1.5 transition-all duration-500
+          ${isUser ? 'text-zen-muted' : 'text-zen-accent'}
         `}>
                     {isUser ? <User className="w-5 h-5" /> : (
-                        <svg viewBox="0 0 100 100" className="w-6 h-6 animate-spin-slow">
-                            <circle cx="50" cy="50" r="20" fill="currentColor" />
-                            <ellipse cx="50" cy="50" rx="40" ry="10" fill="none" stroke="currentColor" strokeWidth="8" transform="rotate(-15 50 50)" />
-                        </svg>
+                        <div className="relative">
+                            <div className={`absolute inset-0 bg-zen-accent/20 blur-lg rounded-full ${message.isStreaming ? 'animate-pulse' : 'hidden'}`} />
+                            <svg viewBox="0 0 100 100" className={`w-6 h-6 fill-current ${message.isStreaming ? 'animate-spin-slow' : ''}`}>
+                                <circle cx="50" cy="50" r="20" />
+                                <ellipse cx="50" cy="50" rx="40" ry="10" fill="none" stroke="currentColor" strokeWidth="8" transform="rotate(-15 50 50)" />
+                            </svg>
+                        </div>
                     )}
                 </div>
 
-                <div className={`flex flex-col gap-1 min-w-0 flex-1 ${isUser ? 'items-end' : 'items-start'}`}>
+                <div className={`flex flex-col gap-2 min-w-0 flex-1`}>
 
-                    <div className={`text-[10px] font-bold text-zen-muted/50 flex gap-2 items-center tracking-widest opacity-0 group-hover:opacity-100 transition-opacity duration-300 uppercase ${isUser ? 'block' : 'hidden'}`}>
-                        <span>{isUser ? 'YOU' : 'SATURN AI'}</span>
+                    <div className="text-xs font-bold text-zen-muted uppercase tracking-widest flex items-center gap-2 mb-1">
+                        {isUser ? 'You' : 'Saturn'}
                     </div>
 
                     {message.attachment && <div className="mb-2">{renderAttachment()}</div>}
@@ -574,8 +577,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDownload, onNa
                     )}
 
                     {message.generatedMedia && (
-                        <div className="mb-6 w-full max-w-2xl animate-scale-in">
-                            <div className="rounded-3xl overflow-hidden border border-zen-border shadow-deep bg-black relative group/media">
+                        <div className="my-6 w-full max-w-2xl animate-scale-in">
+                            <div className="rounded-2xl overflow-hidden border border-zen-border shadow-lg bg-black relative group/media">
                                 {message.generatedMedia.type === 'image' ? (
                                     <img src={message.generatedMedia.uri} alt="Generated" className="w-full h-auto max-h-[600px] object-contain" />
                                 ) : (
@@ -597,15 +600,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onDownload, onNa
 
                     {(cleanContent || (!isUser && !cleanContent && !message.attachment && !message.generatedMedia)) && (
                         <div className={`
-                rounded-3xl text-lg leading-8 relative w-full transition-all duration-500
-                ${isUser ? 'bg-zen-surface/80 backdrop-blur-md text-zen-text rounded-tr-sm border border-zen-border hover:shadow-glow-lg px-8 py-6 shadow-lg' : 'text-zen-text rounded-tl-sm border-none px-0 py-0'}
+                text-lg leading-8 relative w-full transition-all duration-500
+                ${isUser ? 'text-zen-text pl-4' : 'text-zen-text'}
             `}>
                             {isUser ? (
                                 <div className="relative group/usermsg">
-                                    <p className="whitespace-pre-wrap font-medium">{cleanContent}</p>
+                                    <p className="whitespace-pre-wrap font-bold text-xl tracking-tight">{cleanContent}</p>
                                     <button
                                         onClick={handleCopyText}
-                                        className="absolute -top-2 -right-2 p-1.5 rounded-full bg-zen-bg border border-zen-border text-zen-muted opacity-0 group-hover/usermsg:opacity-100 transition-all hover:text-zen-accent hover:border-zen-accent"
+                                        className="absolute -top-1 -right-4 p-1.5 rounded-full text-zen-muted opacity-0 group-hover/usermsg:opacity-100 transition-all hover:text-zen-accent"
                                         title="Copy prompt"
                                     >
                                         {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}

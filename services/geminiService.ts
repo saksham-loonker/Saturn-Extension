@@ -47,7 +47,7 @@ const extractSources = (candidate: any): Source[] => {
     return sources;
 };
 
-export const generateImage = async (prompt: string, modelName?: string): Promise<GeneratedMedia> => {
+export const generateImage = async (prompt: string, modelName?: string, attachments?: Attachment[]): Promise<GeneratedMedia> => {
     try {
         const ai = getAI();
         const selectedModel = modelName || 'gemini-2.5-flash-image';
@@ -56,12 +56,20 @@ export const generateImage = async (prompt: string, modelName?: string): Promise
 
         // Use generateContent for Gemini models (supporting multimodal output)
         if (selectedModel.toLowerCase().includes('gemini')) {
+            const parts: any[] = [{ text: prompt }];
+            
+            if (attachments && attachments.length > 0) {
+                attachments.forEach(att => {
+                    parts.push({ inlineData: { mimeType: att.mimeType, data: att.base64 } });
+                });
+            }
+
             const response = await ai.models.generateContent({
                 model: selectedModel,
                 contents: [
                     {
                         role: 'user',
-                        parts: [{ text: prompt }]
+                        parts: parts
                     }
                 ],
                 config: {

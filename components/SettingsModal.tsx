@@ -336,18 +336,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex gap-3 flex-wrap">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                                             {[
-                                                { id: 'red', color: 'bg-red-600' }, { id: 'blue', color: 'bg-blue-600' },
-                                                { id: 'charcoal-cosmic', color: 'bg-orange-500' }, { id: 'galaxy', color: 'bg-fuchsia-600' },
-                                                { id: 'blackbox', color: 'bg-black' }, { id: 'glass', color: 'bg-cyan-500' },
-                                                { id: 'light', color: 'bg-gray-100', border: 'border-gray-300' }
+                                                { id: 'saturn', name: 'Saturn', color: 'bg-indigo-900' },
+                                                { id: 'game', name: 'Cyberpunk', color: 'bg-yellow-500' },
+                                                { id: 'dev', name: 'Terminal', color: 'bg-green-700' },
+                                                { id: 'paper', name: 'Journal', color: 'bg-stone-100', border: 'border-stone-300' },
+                                                { id: 'space', name: 'Orbit', color: 'bg-black' },
+                                                { id: 'red', name: 'Mars', color: 'bg-red-600' },
+                                                { id: 'blue', name: 'Neptune', color: 'bg-blue-600' },
+                                                { id: 'galaxy', name: 'Nebula', color: 'bg-fuchsia-600' },
+                                                { id: 'glass', name: 'Glass', color: 'bg-cyan-500' },
+                                                { id: 'incognito', name: 'Stealth', color: 'bg-neutral-800' },
                                             ].map(t => (
                                                 <button
                                                     key={t.id}
                                                     onClick={() => setTheme(t.id as Theme)}
-                                                    className={`w-10 h-10 rounded-full border-2 transition-all shadow-lg ${t.color} ${t.border || 'border-transparent'} ${theme === t.id ? 'scale-110 border-white' : 'opacity-60 hover:opacity-100'}`}
-                                                />
+                                                    className={`p-3 rounded-xl border text-left transition-all group relative overflow-hidden ${theme === t.id ? 'border-zen-accent bg-zen-accent/10 shadow-md' : 'border-zen-border bg-zen-bg/50 hover:border-zen-accent/50'}`}
+                                                >
+                                                    <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${t.color} ${t.border || ''} shadow-sm`} />
+                                                    <div className="text-sm font-bold text-zen-text mt-4">{t.name}</div>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
@@ -554,6 +563,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     </div>
                                 ) : (
                                     <div className="flex-1 flex flex-col gap-4">
+                                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                                            {[
+                                                "Be concise",
+                                                "Act as an expert coder",
+                                                "Explain like I'm 5",
+                                                "Use Markdown"
+                                            ].map(preset => (
+                                                <button
+                                                    key={preset}
+                                                    onClick={() => setCustomInstructions(customInstructions ? customInstructions + "\n- " + preset : "- " + preset)}
+                                                    className="px-3 py-1.5 bg-zen-surface border border-zen-border rounded-lg text-xs font-medium whitespace-nowrap hover:bg-zen-bg hover:border-zen-accent transition-colors"
+                                                >
+                                                    + {preset}
+                                                </button>
+                                            ))}
+                                        </div>
+
                                         <textarea
                                             value={customInstructions}
                                             onChange={(e) => setCustomInstructions(e.target.value)}
