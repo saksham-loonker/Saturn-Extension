@@ -50,8 +50,37 @@ This will create a `dist` folder in your project directory containing the compil
 4. Select the `dist` folder located inside the `saturn-extension` directory you just built.
 5. Open a new tab, and Saturn will launch!
 
-### 3. Configure API Key
+### 5. Configure API Key
 Open settings and paste your API key. You can also select models based on your preference and tier of your Gemini API key.
+
+## 📱 Mobile Deployment (Android)
+
+Saturn can also be deployed as a mobile application using Capacitor.
+
+### Prerequisites
+- Android Studio
+- Capacitor CLI (run `npm install -D @capacitor/cli` if not installed)
+
+### Steps
+
+1. **Build the Web App**
+   Generate the production build:
+   ```bash
+   npm run deploy
+   ```
+
+2. **Sync Assets**
+   Copy the web assets to the native Android project:
+   ```bash
+   npx cap copy
+   ```
+
+3. **Open in Android Studio**
+   Launch the native project:
+   ```bash
+   npx cap open android
+   ```
+   From Android Studio, you can build and run the app on an emulator or connect a physical device.
 
 ## 🧩 Troubleshooting
 
