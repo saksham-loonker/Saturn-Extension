@@ -88,4 +88,6 @@ Saturn can also be deployed as a mobile application using Capacitor.
 - **API Errors?** Double-check your settings and ensure your Gemini API key is valid.
 - **Code Execution Not Working?** Ensure you are using the latest version; we use a secure sandbox for `eval()` operations.
 
-Built using **React**, **Vite**, **TailwindCSS**, and **Google Gemini**.
+Built using **React**, **Vite**, **TailwindCSS**, and **Google Gemini**, by **Kian Pipalia**, **Saksham Loonker**, and **Vivan Jhaveri**.
+
+Thank you for using Saturn! 🪐
