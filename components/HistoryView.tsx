@@ -70,8 +70,7 @@ export default function HistoryView({ isOpen, onClose, history, archivedTabs, on
                         placeholder={activeTab === 'chats' ? "Search your conversations..." : "Search your browsing history..."}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-zen-surface/50 border border-zen-border/50 rounded-2xl py-5 pl-14 pr-6 text-xl text-zen-text placeholder-zen-muted/40 focus:ring-0 focus:border-zen-accent focus:bg-zen-surface transition-all outline-none"
-                        autoFocus
+                        className="w-full bg-black/20 border border-zen-border/50 rounded-2xl py-5 pl-14 pr-6 text-xl text-zen-text placeholder-zen-muted/40 focus:ring-0 focus:border-zen-accent focus:bg-black/30 transition-all outline-none"
                     />
                 </div>
 
